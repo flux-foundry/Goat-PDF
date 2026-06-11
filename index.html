@@ -6,6 +6,8 @@
     <title>GoatPDF | Swift Local Converter</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- SortableJS for smooth drag and drop reordering -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;700;900&display=swap');
         body {
@@ -39,6 +41,11 @@
         .quote-visible {
             opacity: 1;
             transform: translateY(0);
+        }
+        /* Style for item being dragged */
+        .sortable-ghost {
+            opacity: 0.4;
+            transform: scale(0.95);
         }
     </style>
 </head>
@@ -178,6 +185,7 @@
         // --- App State ---
         let filesList = [];
         let combinedFilename = ""; 
+        let sortableInstance = null;
         
         let config = {
             output: 'combined', 
@@ -201,11 +209,13 @@
         const dynamicFooterQuote = document.getElementById('dynamic-footer-quote');
         const errorToast = document.getElementById('error-toast');
         
+        // Modal Elements
         const imageModal = document.getElementById('image-modal');
         const modalImg = document.getElementById('modal-img');
         const modalFallback = document.getElementById('modal-fallback');
         const closeModalBtn = document.getElementById('close-modal');
 
+        // Confirm Elements
         const confirmModal = document.getElementById('confirm-modal');
         const confirmCard = document.getElementById('confirm-card');
         const confirmTitle = document.getElementById('confirm-title');
@@ -214,7 +224,7 @@
         const confirmCancel = document.getElementById('confirm-cancel');
         let confirmAction = null; 
 
-        // --- Jokes Arrays (30+ Each) ---
+        // --- Jokes Arrays (30+ Each with Emojis) ---
         const limitJokes2MB = [
             "Protecting the server's precious 5GB total storage 🗄️",
             "Shrinking it so the portal gods accept your offering 🛐",
@@ -433,7 +443,7 @@
         }
 
         function handleFiles(files) {
-            errorToast.classList.add('hidden'); // Clear errors on new upload
+            errorToast.classList.add('hidden'); 
             errorToast.classList.remove('flex');
             
             const validImages = Array.from(files).filter(file => file.type.startsWith('image/'));
@@ -456,9 +466,8 @@
             if (config.output === 'combined') {
                 const wrapper = document.createElement('div');
                 wrapper.className = 'flex flex-col gap-1.5';
-                // Empty placeholder per user request
                 wrapper.innerHTML = `<label class="text-xs font-bold text-zinc-500 uppercase tracking-widest">Name your combined drop</label>
-                                     <input type="text" id="combined-filename-input" value="${combinedFilename}" class="w-full bg-zinc-950 border border-zinc-800 text-zinc-200 text-sm font-medium rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500 transition-colors">`;
+                                     <input type="text" id="combined-filename-input" value="${combinedFilename}" class="w-full bg-zinc-950 border border-zinc-800 text-zinc-200 text-sm font-medium rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500 transition-colors" placeholder="">`;
                 
                 renameContainer.appendChild(wrapper);
                 
@@ -498,7 +507,7 @@
                 document.querySelectorAll('.delete-solo').forEach(btn => {
                     btn.addEventListener('click', (e) => {
                         const idx = parseInt(e.currentTarget.getAttribute('data-index'));
-                        showConfirm("Ayo hold up", "You deadass tryna yeet this one?", () => {
+                        showConfirm("Ayo hold up", "You fr wanna yeet this one?", () => {
                             URL.revokeObjectURL(filesList[idx].url);
                             filesList.splice(idx, 1);
                             updateUI();
@@ -538,8 +547,11 @@
             previewGrid.innerHTML = '';
             filesList.forEach((item, index) => {
                 const div = document.createElement('div');
-                div.className = 'relative flex-shrink-0 w-24 h-24 rounded-xl overflow-hidden snap-start border border-zinc-700 bg-zinc-800 group cursor-pointer';
-                div.onclick = () => openPreview(item.url); 
+                div.className = 'relative flex-shrink-0 w-24 h-24 rounded-xl overflow-hidden snap-start border border-zinc-700 bg-zinc-800 group cursor-grab active:cursor-grabbing';
+                div.onclick = (e) => {
+                    // Prevent opening preview if we are dragging
+                    if (!div.classList.contains('sortable-ghost')) openPreview(item.url); 
+                };
                 
                 const fallback = document.createElement('div');
                 fallback.className = 'absolute inset-0 flex flex-col items-center justify-center p-2 text-center leading-tight text-zinc-500 font-bold';
@@ -547,15 +559,15 @@
                 
                 const img = document.createElement('img');
                 img.src = item.url;
-                img.className = 'w-full h-full object-cover transition-transform group-hover:scale-105 relative z-10';
+                img.className = 'w-full h-full object-cover transition-transform group-hover:scale-105 relative z-10 pointer-events-none'; // disable pointer so drag works smoothly
                 img.onerror = function() { this.style.opacity = 0; }; 
                 
                 const btn = document.createElement('button');
-                btn.className = 'absolute top-1 right-1 bg-red-500/90 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shadow-md hover:bg-red-500 transition-colors z-20 backdrop-blur-sm';
+                btn.className = 'absolute top-1 right-1 bg-red-500/90 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shadow-md hover:bg-red-500 transition-colors z-20 backdrop-blur-sm cursor-pointer';
                 btn.innerHTML = '×';
                 btn.onclick = (e) => { 
                     e.stopPropagation(); 
-                    showConfirm("Ayo hold up", "You deadass tryna yeet this one?", () => {
+                    showConfirm("Ayo hold up", "You fr wanna yeet this one?", () => {
                         URL.revokeObjectURL(item.url); 
                         filesList.splice(index, 1); 
                         updateUI(); 
@@ -567,6 +579,25 @@
                 div.appendChild(btn);
                 previewGrid.appendChild(div);
             });
+
+            // Initialize/Refresh SortableJS for drag and drop
+            if (sortableInstance) {
+                sortableInstance.destroy();
+            }
+            if (filesList.length > 0) {
+                sortableInstance = new Sortable(previewGrid, {
+                    animation: 150,
+                    delay: 200, // Small delay allows clicking on mobile without instantly dragging
+                    delayOnTouchOnly: true,
+                    ghostClass: 'sortable-ghost',
+                    onEnd: function (evt) {
+                        // Update our array to match the new DOM order
+                        const movedItem = filesList.splice(evt.oldIndex, 1)[0];
+                        filesList.splice(evt.newIndex, 0, movedItem);
+                        updateUI(); // Rebuild everything so indexes stay perfectly in sync
+                    }
+                });
+            }
         }
 
         async function processPDFs() {
@@ -601,7 +632,6 @@
                         await new Promise(r => setTimeout(r, 10)); 
                     }
                     
-                    // Dynamic Gen Z default filename if empty
                     let rawName = combinedFilename.trim();
                     if (!rawName) {
                         if (filesList.length === 1) {
@@ -627,7 +657,6 @@
                 }
             } catch (error) {
                 console.error(error);
-                // Show clean in-app toast instead of browser alert
                 errorToast.classList.remove('hidden');
                 errorToast.classList.add('flex');
             }
@@ -700,7 +729,6 @@
                     
                     const dataUrl = canvas.toDataURL('image/jpeg', quality);
                     
-                    // Crucial fix: Clear canvas memory immediately to prevent mobile crashes on 2nd attempt
                     canvas.width = 0;
                     canvas.height = 0;
                     canvas = null; 
