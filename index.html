@@ -124,6 +124,15 @@
                     <!-- Rename inputs generated dynamically here -->
                 </div>
 
+                <!-- Custom Error Toast -->
+                <div id="error-toast" class="hidden w-full bg-red-500/20 border border-red-500/30 text-red-400 p-4 rounded-xl flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
+                    <div class="flex items-center gap-3">
+                        <span class="text-xl">⚠️</span>
+                        <span id="error-toast-msg" class="text-sm font-bold leading-tight">Browser ran out of memory. The portal gods are angry today.</span>
+                    </div>
+                    <button onclick="window.location.reload()" class="bg-red-500 hover:bg-red-400 text-white text-xs px-4 py-2 rounded-lg font-bold transition-colors whitespace-nowrap shadow-md">Refresh App</button>
+                </div>
+
                 <button id="cook-btn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl shadow-[0_0_20px_rgba(79,70,229,0.3)] transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                     <span>Cook the PDF</span>
                     <svg class="w-5 h-5 hidden loader-svg animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
@@ -147,7 +156,6 @@
         <div class="relative max-w-4xl w-full h-full flex flex-col items-center justify-center">
             <button id="close-modal" class="absolute top-4 right-4 bg-zinc-800 text-white rounded-full w-10 h-10 flex items-center justify-center text-xl font-bold shadow hover:bg-zinc-700 transition-colors z-50">×</button>
             <img id="modal-img" src="" class="max-w-full max-h-[85vh] rounded-lg shadow-2xl object-contain hidden" alt="Preview">
-            <!-- Native HTML fallback, fully respects the app's font -->
             <div id="modal-fallback" class="hidden flex-col items-center justify-center p-8 bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl text-center max-w-xs w-full aspect-square">
                 <span class="text-zinc-500 font-bold text-xl leading-snug">Browser acting sus,<br>but the PDF will still cook</span>
             </div>
@@ -191,14 +199,13 @@
         const loaderSvg = document.querySelector('.loader-svg');
         const settingBtns = document.querySelectorAll('.setting-btn');
         const dynamicFooterQuote = document.getElementById('dynamic-footer-quote');
+        const errorToast = document.getElementById('error-toast');
         
-        // Modal Elements
         const imageModal = document.getElementById('image-modal');
         const modalImg = document.getElementById('modal-img');
         const modalFallback = document.getElementById('modal-fallback');
         const closeModalBtn = document.getElementById('close-modal');
 
-        // Confirm Elements
         const confirmModal = document.getElementById('confirm-modal');
         const confirmCard = document.getElementById('confirm-card');
         const confirmTitle = document.getElementById('confirm-title');
@@ -207,7 +214,7 @@
         const confirmCancel = document.getElementById('confirm-cancel');
         let confirmAction = null; 
 
-        // --- Jokes Arrays ---
+        // --- Jokes Arrays (30+ Each) ---
         const limitJokes2MB = [
             "Protecting the server's precious 5GB total storage 🗄️",
             "Shrinking it so the portal gods accept your offering 🛐",
@@ -238,7 +245,9 @@
             "Making your ID card small enough for dial-up speeds 📻",
             "When you got 99 problems but file size ain't one 💯",
             "Hitting that sweet spot under 2MB 🎯",
-            "Making it bite-sized for the boomer admins 🤏"
+            "Making it bite-sized for the boomer admins 🤏",
+            "Squishing it so the 2012 portal doesn't throw a tantrum 😤",
+            "Cutting the weight so your upload doesn't stall at 99% 📉"
         ];
 
         const limitJokes1MB = [
@@ -260,7 +269,7 @@
             "Maximum compression, zero regrets 🗜️",
             "Because the uni's server is held together by tape 🦆",
             "File size going ghost 👻",
-            "Turning your 4K pics into a GameBoy game 🎮",
+            "Turning your pics into a GameBoy game 🎮",
             "Making it fit the 1MB cap like Cinderella's shoe 👠",
             "When the deadline is 11:59 and the file is 1.01MB 💀",
             "Reducing quality so their servers don't combust 🔥",
@@ -271,7 +280,9 @@
             "Shrinking your identity down to 1024 KB 🧮",
             "Taking your PDF to the hydraulic press 🏗️",
             "For the webmasters stuck in the 90s 👾",
-            "Because anything over 1MB is 'suspiciously large' 🤨"
+            "Because anything over 1MB is 'suspiciously large' 🤨",
+            "Chopping the bytes so the 1999 database survives 🩹",
+            "1MB limit check: passed the vibe check ✅"
         ];
 
         const footerQuotes = [
@@ -304,7 +315,9 @@
             "Local-first architecture. Sounds nerdy, is actually goated. 🐐",
             "Your secrets are safe with your own CPU. 🤖",
             "Peak efficiency for the midnight assignment rush. 🕛",
-            "GoatPDF: Because your privacy shouldn't be an afterthought. 👑"
+            "GoatPDF: Because your privacy shouldn't be an afterthought. 👑",
+            "100% client-side because trust issues are valid. 🧐",
+            "Turning pics to PDFs without the third-party weirdness. 👽"
         ];
 
         let quoteBag = [];
@@ -420,6 +433,9 @@
         }
 
         function handleFiles(files) {
+            errorToast.classList.add('hidden'); // Clear errors on new upload
+            errorToast.classList.remove('flex');
+            
             const validImages = Array.from(files).filter(file => file.type.startsWith('image/'));
             if (validImages.length === 0) return;
             
@@ -440,8 +456,9 @@
             if (config.output === 'combined') {
                 const wrapper = document.createElement('div');
                 wrapper.className = 'flex flex-col gap-1.5';
+                // Empty placeholder per user request
                 wrapper.innerHTML = `<label class="text-xs font-bold text-zinc-500 uppercase tracking-widest">Name your combined drop</label>
-                                     <input type="text" id="combined-filename-input" value="${combinedFilename}" class="w-full bg-zinc-950 border border-zinc-800 text-zinc-200 text-sm font-medium rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500 transition-colors" placeholder="">`;
+                                     <input type="text" id="combined-filename-input" value="${combinedFilename}" class="w-full bg-zinc-950 border border-zinc-800 text-zinc-200 text-sm font-medium rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500 transition-colors">`;
                 
                 renameContainer.appendChild(wrapper);
                 
@@ -481,7 +498,7 @@
                 document.querySelectorAll('.delete-solo').forEach(btn => {
                     btn.addEventListener('click', (e) => {
                         const idx = parseInt(e.currentTarget.getAttribute('data-index'));
-                        showConfirm("Ayo hold up", "You fr wanna yeet this one?", () => {
+                        showConfirm("Ayo hold up", "You deadass tryna yeet this one?", () => {
                             URL.revokeObjectURL(filesList[idx].url);
                             filesList.splice(idx, 1);
                             updateUI();
@@ -538,7 +555,7 @@
                 btn.innerHTML = '×';
                 btn.onclick = (e) => { 
                     e.stopPropagation(); 
-                    showConfirm("Ayo hold up", "You fr wanna yeet this one?", () => {
+                    showConfirm("Ayo hold up", "You deadass tryna yeet this one?", () => {
                         URL.revokeObjectURL(item.url); 
                         filesList.splice(index, 1); 
                         updateUI(); 
@@ -556,6 +573,8 @@
             cookBtn.disabled = true;
             loaderSvg.classList.remove('hidden');
             cookBtn.querySelector('span').innerText = 'Cooking...';
+            errorToast.classList.add('hidden');
+            errorToast.classList.remove('flex');
 
             await new Promise(r => setTimeout(r, 50)); 
 
@@ -582,7 +601,16 @@
                         await new Promise(r => setTimeout(r, 10)); 
                     }
                     
-                    let rawName = combinedFilename.trim() || 'Merged_Lore';
+                    // Dynamic Gen Z default filename if empty
+                    let rawName = combinedFilename.trim();
+                    if (!rawName) {
+                        if (filesList.length === 1) {
+                            rawName = filesList[0].customName;
+                        } else {
+                            rawName = `${filesList[0].customName}_plus_${filesList.length - 1}_lore`;
+                        }
+                    }
+                    
                     if (!rawName.toLowerCase().endsWith('.pdf')) rawName += '.pdf';
                     pdf.save(rawName);
 
@@ -599,7 +627,9 @@
                 }
             } catch (error) {
                 console.error(error);
-                alert("Something went wrong. The portal gods are angry today.");
+                // Show clean in-app toast instead of browser alert
+                errorToast.classList.remove('hidden');
+                errorToast.classList.add('flex');
             }
 
             loaderSvg.classList.add('hidden');
@@ -648,7 +678,7 @@
                 const url = URL.createObjectURL(file);
                 const img = new Image();
                 img.onload = () => {
-                    const canvas = document.createElement('canvas');
+                    let canvas = document.createElement('canvas');
                     
                     let MAX_SIZE = overrideMaxSize || (quality >= 0.9 ? 2000 : (quality >= 0.6 ? 1200 : 800));
                     let width = img.width;
@@ -669,10 +699,19 @@
                     ctx.drawImage(img, 0, 0, width, height);
                     
                     const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                    
+                    // Crucial fix: Clear canvas memory immediately to prevent mobile crashes on 2nd attempt
+                    canvas.width = 0;
+                    canvas.height = 0;
+                    canvas = null; 
+                    
                     URL.revokeObjectURL(url);
                     resolve({ dataUrl, width, height });
                 };
-                img.onerror = reject;
+                img.onerror = () => {
+                    URL.revokeObjectURL(url);
+                    reject(new Error("Failed to load image"));
+                };
                 img.src = url;
             });
         }
