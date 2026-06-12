@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GoatPDF | Swift Local Converter</title>
+    <title>GoatPDF | Fast. Local. Goated.</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <!-- SortableJS for smooth drag and drop reordering -->
@@ -42,10 +42,18 @@
             opacity: 1;
             transform: translateY(0);
         }
-        /* Style for item being dragged */
+        
+        /* Smooth, solid drag state */
         .sortable-ghost {
-            opacity: 0.4;
-            transform: scale(0.95);
+            opacity: 0.3;
+            background-color: #27272a; 
+            border: 2px dashed #6366f1; 
+            border-radius: 0.75rem;
+        }
+        .sortable-drag {
+            cursor: grabbing !important;
+            opacity: 1 !important;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
         }
     </style>
 </head>
@@ -70,8 +78,16 @@
 
         <div id="preview-container" class="hidden flex flex-col gap-4">
             <div class="flex items-center justify-between">
-                <h2 class="font-bold text-zinc-300">The Lineup</h2>
-                <button id="clear-btn" class="text-sm text-red-400 hover:text-red-300 transition-colors font-bold tracking-wide px-3 py-1 bg-red-400/10 rounded-lg">Yeet All</button>
+                <h2 class="font-bold text-zinc-300 flex items-center gap-2">
+                    The Lineup 
+                    <span id="lineup-count" class="bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-md text-xs border border-zinc-700">0</span>
+                </h2>
+                <div class="flex gap-2">
+                    <button id="organize-btn" class="text-sm text-indigo-400 hover:text-indigo-300 transition-colors font-bold tracking-wide px-3 py-1.5 bg-indigo-400/10 hover:bg-indigo-400/20 rounded-lg flex items-center gap-1">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg> Organize
+                    </button>
+                    <button id="clear-btn" class="text-sm text-red-400 hover:text-red-300 transition-colors font-bold tracking-wide px-3 py-1.5 bg-red-400/10 hover:bg-red-400/20 rounded-lg">Yeet All</button>
+                </div>
             </div>
             <div id="preview-grid" class="flex gap-4 overflow-x-auto py-2 hide-scrollbar snap-x">
                 <!-- Thumbnails inject here -->
@@ -131,16 +147,16 @@
                     <!-- Rename inputs generated dynamically here -->
                 </div>
 
-                <!-- Custom Error Toast -->
-                <div id="error-toast" class="hidden w-full bg-red-500/20 border border-red-500/30 text-red-400 p-4 rounded-xl flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
+                <!-- Custom Error Toast (Minimal & Clean) -->
+                <div id="error-toast" class="hidden w-full bg-zinc-900 border border-red-500/30 p-4 rounded-2xl flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
                     <div class="flex items-center gap-3">
-                        <span class="text-xl">⚠️</span>
-                        <span id="error-toast-msg" class="text-sm font-bold leading-tight">Browser ran out of memory. The portal gods are angry today.</span>
+                        <span class="text-2xl">💀</span>
+                        <span id="error-toast-msg" class="text-sm text-zinc-300 font-medium leading-snug"></span>
                     </div>
-                    <button onclick="window.location.reload()" class="bg-red-500 hover:bg-red-400 text-white text-xs px-4 py-2 rounded-lg font-bold transition-colors whitespace-nowrap shadow-md">Refresh App</button>
+                    <button onclick="window.location.reload()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-sm px-5 py-2.5 rounded-xl font-bold transition-colors whitespace-nowrap shadow-md w-full sm:w-auto">Refresh to respawn</button>
                 </div>
 
-                <button id="cook-btn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl shadow-[0_0_20px_rgba(79,70,229,0.3)] transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                <button id="cook-btn" disabled class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl shadow-[0_0_20px_rgba(79,70,229,0.3)] transition-all transform active:scale-95 disabled:bg-zinc-800 disabled:text-zinc-500 disabled:shadow-none disabled:active:scale-100 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                     <span>Cook the PDF</span>
                     <svg class="w-5 h-5 hidden loader-svg animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                 </button>
@@ -158,22 +174,42 @@
         </div>
     </footer>
 
+    <!-- Fullscreen Organize Modal -->
+    <div id="organize-modal" class="hidden fixed inset-0 z-[70] bg-zinc-950 flex flex-col transition-opacity duration-200 opacity-0">
+        <div class="p-6 flex items-center justify-between border-b border-zinc-800 bg-zinc-900/50">
+            <div>
+                <h2 class="text-2xl sm:text-3xl font-black text-zinc-100 flex items-center gap-2">Organize Lore <span id="organize-count" class="text-sm bg-indigo-600 px-2 py-0.5 rounded-lg text-white mt-1">0</span></h2>
+                <p class="text-sm text-zinc-500 font-medium mt-1">Hold and drag to reorder pages. It's that easy.</p>
+            </div>
+            <button id="close-organize" class="bg-zinc-800 text-white rounded-full w-12 h-12 flex items-center justify-center text-xl font-bold shadow-lg hover:bg-zinc-700 transition-colors">×</button>
+        </div>
+        <div class="flex-grow p-4 sm:p-8 overflow-y-auto">
+            <div id="organize-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                <!-- Organize thumbnails inject here -->
+            </div>
+        </div>
+        <div class="p-6 border-t border-zinc-800 bg-zinc-900/80 flex justify-center">
+            <button id="done-organize-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white text-base px-10 py-3 rounded-xl font-bold transition-all shadow-lg active:scale-95">Looks Good</button>
+        </div>
+    </div>
+
     <!-- Fullscreen Image Preview Modal -->
-    <div id="image-modal" class="hidden fixed inset-0 z-[50] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity cursor-pointer">
+    <div id="image-modal" class="hidden fixed inset-0 z-[80] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity cursor-pointer">
         <div class="relative max-w-4xl w-full h-full flex flex-col items-center justify-center">
-            <button id="close-modal" class="absolute top-4 right-4 bg-zinc-800 text-white rounded-full w-10 h-10 flex items-center justify-center text-xl font-bold shadow hover:bg-zinc-700 transition-colors z-50">×</button>
+            <button id="close-modal" class="absolute top-4 right-4 bg-zinc-800 text-white rounded-full w-10 h-10 flex items-center justify-center text-xl font-bold shadow hover:bg-zinc-700 transition-colors z-[90]">×</button>
             <img id="modal-img" src="" class="max-w-full max-h-[85vh] rounded-lg shadow-2xl object-contain hidden" alt="Preview">
+            <!-- Native HTML fallback, fully respects the app's font -->
             <div id="modal-fallback" class="hidden flex-col items-center justify-center p-8 bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl text-center max-w-xs w-full aspect-square">
-                <span class="text-zinc-500 font-bold text-xl leading-snug">Browser acting sus,<br>but the PDF will still cook</span>
+                <span class="text-zinc-500 font-bold text-xl leading-snug">Preview acting sus,<br>but the PDF will still cook</span>
             </div>
         </div>
     </div>
 
     <!-- Custom Gen Z Confirm Modal -->
-    <div id="confirm-modal" class="hidden fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 opacity-0 transition-opacity duration-200">
+    <div id="confirm-modal" class="hidden fixed inset-0 z-[90] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 opacity-0 transition-opacity duration-200">
         <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 max-w-xs w-full text-center flex flex-col gap-3 shadow-2xl transform scale-95 transition-transform duration-200" id="confirm-card">
             <h3 class="text-xl font-bold text-zinc-100" id="confirm-title">Ayo hold up</h3>
-            <p class="text-zinc-400 text-sm font-medium leading-tight" id="confirm-msg">You deadass tryna yeet this one?</p>
+            <p class="text-zinc-400 text-sm font-medium leading-tight" id="confirm-msg">You deadass tryna yeet this?</p>
             <div class="flex gap-3 mt-4">
                 <button id="confirm-cancel" class="flex-1 py-3 rounded-xl bg-zinc-800 text-zinc-300 font-bold hover:bg-zinc-700 transition-colors text-sm">Nvm</button>
                 <button id="confirm-yes" class="flex-1 py-3 rounded-xl bg-red-600 text-white font-bold hover:bg-red-500 transition-colors shadow-lg shadow-red-500/20 text-sm">Deadass</button>
@@ -185,7 +221,8 @@
         // --- App State ---
         let filesList = [];
         let combinedFilename = ""; 
-        let sortableInstance = null;
+        let sortableInstanceMain = null;
+        let sortableInstanceOrganize = null;
         
         let config = {
             output: 'combined', 
@@ -208,7 +245,16 @@
         const settingBtns = document.querySelectorAll('.setting-btn');
         const dynamicFooterQuote = document.getElementById('dynamic-footer-quote');
         const errorToast = document.getElementById('error-toast');
+        const lineupCount = document.getElementById('lineup-count');
         
+        // Organize Elements
+        const organizeBtn = document.getElementById('organize-btn');
+        const organizeModal = document.getElementById('organize-modal');
+        const organizeGrid = document.getElementById('organize-grid');
+        const closeOrganizeBtn = document.getElementById('close-organize');
+        const doneOrganizeBtn = document.getElementById('done-organize-btn');
+        const organizeCount = document.getElementById('organize-count');
+
         // Modal Elements
         const imageModal = document.getElementById('image-modal');
         const modalImg = document.getElementById('modal-img');
@@ -223,6 +269,27 @@
         const confirmYes = document.getElementById('confirm-yes');
         const confirmCancel = document.getElementById('confirm-cancel');
         let confirmAction = null; 
+
+        // --- Memory Jokes (Non-Repeating) ---
+        const memoryJokes = [
+            "Bro really tried to compile the Library of Alexandria 🏛️. Memory is cooked.",
+            "Ain't no way you have this much lore 📜. The memory literally gave up.",
+            "Are you submitting a whole cinematic universe? 🍿 Memory cap reached.",
+            "Bro is archiving the entire internet 🌐. Memory tapped out.",
+            "Did you just try to upload the whole syllabus? 📚 Memory is fried.",
+            "You actually broke the memory limit 💥. How much lore do you even have?",
+            "Memory is in the trenches 🪖. Bro is converting a 10-season anime.",
+            "The memory tapped out 😵. Are you submitting a whole documentary?"
+        ];
+        let lastErrorIdx = -1;
+        function showErrorToast() {
+            let newIdx;
+            do { newIdx = Math.floor(Math.random() * memoryJokes.length); } while (newIdx === lastErrorIdx);
+            lastErrorIdx = newIdx;
+            document.getElementById('error-toast-msg').innerText = memoryJokes[newIdx];
+            errorToast.classList.remove('hidden');
+            errorToast.classList.add('flex');
+        }
 
         // --- Jokes Arrays (30+ Each with Emojis) ---
         const limitJokes2MB = [
@@ -420,6 +487,21 @@
             }
         });
 
+        // Organize Modal Listeners
+        function openOrganize() {
+            renderOrganizeGrid();
+            organizeModal.classList.remove('hidden');
+            requestAnimationFrame(() => organizeModal.classList.remove('opacity-0'));
+        }
+        function closeOrganize() {
+            organizeModal.classList.add('opacity-0');
+            setTimeout(() => organizeModal.classList.add('hidden'), 200);
+            updateUI(); // Resync main view
+        }
+        organizeBtn.addEventListener('click', openOrganize);
+        closeOrganizeBtn.addEventListener('click', closeOrganize);
+        doneOrganizeBtn.addEventListener('click', closeOrganize);
+
         fileInput.addEventListener('click', function() { this.value = null; });
         
         dropZone.addEventListener('click', () => fileInput.click());
@@ -430,6 +512,7 @@
         
         clearBtn.addEventListener('click', () => { 
             showConfirm("Wipe the lineup?", "Bro you actually tryna delete everything?", () => {
+                filesList.forEach(item => URL.revokeObjectURL(item.url));
                 filesList = []; combinedFilename = ""; updateUI(); 
             });
         });
@@ -467,7 +550,7 @@
                 const wrapper = document.createElement('div');
                 wrapper.className = 'flex flex-col gap-1.5';
                 wrapper.innerHTML = `<label class="text-xs font-bold text-zinc-500 uppercase tracking-widest">Name your combined drop</label>
-                                     <input type="text" id="combined-filename-input" value="${combinedFilename}" class="w-full bg-zinc-950 border border-zinc-800 text-zinc-200 text-sm font-medium rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500 transition-colors" placeholder="">`;
+                                     <input type="text" id="combined-filename-input" value="${combinedFilename}" class="w-full bg-zinc-950 border border-zinc-800 text-zinc-200 text-sm font-medium rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500 transition-colors">`;
                 
                 renameContainer.appendChild(wrapper);
                 
@@ -531,7 +614,60 @@
             imageModal.classList.remove('hidden');
         };
 
+        window.deleteFile = function(index) {
+            showConfirm("Ayo hold up", "You fr wanna yeet this one?", () => {
+                URL.revokeObjectURL(filesList[index].url); 
+                filesList.splice(index, 1); 
+                updateUI();
+                renderOrganizeGrid(); // Update modal if open
+            });
+        };
+
+        function renderOrganizeGrid() {
+            organizeGrid.innerHTML = '';
+            organizeCount.innerText = filesList.length;
+            
+            filesList.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'relative aspect-[3/4] rounded-2xl overflow-hidden border-2 border-zinc-800 bg-zinc-800 cursor-grab active:cursor-grabbing group';
+                div.onclick = (e) => {
+                    if (!div.classList.contains('sortable-ghost')) openPreview(item.url); 
+                };
+                
+                div.innerHTML = `
+                    <div class="absolute top-2 left-2 bg-black/80 backdrop-blur text-white rounded-lg px-2.5 py-1 text-xs font-black shadow-md z-20 pointer-events-none">
+                        ${index + 1}
+                    </div>
+                    <div class="absolute inset-0 flex flex-col items-center justify-center p-2 text-center leading-tight text-zinc-500 font-bold z-0 pointer-events-none">
+                        <span class="text-sm">No Preview</span><span class="text-[10px] opacity-70 mt-0.5">(will cook tho)</span>
+                    </div>
+                    <img src="${item.url}" class="w-full h-full object-cover relative z-10 pointer-events-none" onerror="this.style.opacity=0;">
+                    <button class="absolute top-2 right-2 bg-red-500/90 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold shadow-md hover:bg-red-500 transition-colors z-20 backdrop-blur-sm cursor-pointer opacity-0 group-hover:opacity-100 sm:opacity-100" onclick="event.stopPropagation(); deleteFile(${index})">×</button>
+                `;
+                organizeGrid.appendChild(div);
+            });
+
+            if (sortableInstanceOrganize) sortableInstanceOrganize.destroy();
+            if (filesList.length > 0) {
+                sortableInstanceOrganize = new Sortable(organizeGrid, {
+                    animation: 250,
+                    delay: 150, 
+                    delayOnTouchOnly: true,
+                    ghostClass: 'sortable-ghost',
+                    dragClass: 'sortable-drag',
+                    easing: "cubic-bezier(0.25, 1, 0.5, 1)",
+                    onEnd: function (evt) {
+                        const movedItem = filesList.splice(evt.oldIndex, 1)[0];
+                        filesList.splice(evt.newIndex, 0, movedItem);
+                        renderOrganizeGrid(); // Re-render to fix numbers
+                    }
+                });
+            }
+        }
+
         function updateUI() {
+            lineupCount.innerText = filesList.length;
+
             if (filesList.length > 0) {
                 previewContainer.classList.remove('hidden');
                 cookBtn.disabled = false;
@@ -549,7 +685,6 @@
                 const div = document.createElement('div');
                 div.className = 'relative flex-shrink-0 w-24 h-24 rounded-xl overflow-hidden snap-start border border-zinc-700 bg-zinc-800 group cursor-grab active:cursor-grabbing';
                 div.onclick = (e) => {
-                    // Prevent opening preview if we are dragging
                     if (!div.classList.contains('sortable-ghost')) openPreview(item.url); 
                 };
                 
@@ -559,19 +694,15 @@
                 
                 const img = document.createElement('img');
                 img.src = item.url;
-                img.className = 'w-full h-full object-cover transition-transform group-hover:scale-105 relative z-10 pointer-events-none'; // disable pointer so drag works smoothly
+                img.className = 'w-full h-full object-cover transition-transform group-hover:scale-105 relative z-10 pointer-events-none'; 
                 img.onerror = function() { this.style.opacity = 0; }; 
                 
                 const btn = document.createElement('button');
-                btn.className = 'absolute top-1 right-1 bg-red-500/90 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shadow-md hover:bg-red-500 transition-colors z-20 backdrop-blur-sm cursor-pointer';
+                btn.className = 'absolute top-1 right-1 bg-red-500/90 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shadow-md hover:bg-red-500 transition-colors z-20 backdrop-blur-sm cursor-pointer opacity-0 group-hover:opacity-100 sm:opacity-100';
                 btn.innerHTML = '×';
                 btn.onclick = (e) => { 
                     e.stopPropagation(); 
-                    showConfirm("Ayo hold up", "You fr wanna yeet this one?", () => {
-                        URL.revokeObjectURL(item.url); 
-                        filesList.splice(index, 1); 
-                        updateUI(); 
-                    });
+                    deleteFile(index);
                 };
 
                 div.appendChild(fallback);
@@ -580,21 +711,19 @@
                 previewGrid.appendChild(div);
             });
 
-            // Initialize/Refresh SortableJS for drag and drop
-            if (sortableInstance) {
-                sortableInstance.destroy();
-            }
+            if (sortableInstanceMain) sortableInstanceMain.destroy();
             if (filesList.length > 0) {
-                sortableInstance = new Sortable(previewGrid, {
-                    animation: 150,
-                    delay: 200, // Small delay allows clicking on mobile without instantly dragging
+                sortableInstanceMain = new Sortable(previewGrid, {
+                    animation: 250,
+                    delay: 150, 
                     delayOnTouchOnly: true,
                     ghostClass: 'sortable-ghost',
+                    dragClass: 'sortable-drag',
+                    easing: "cubic-bezier(0.25, 1, 0.5, 1)",
                     onEnd: function (evt) {
-                        // Update our array to match the new DOM order
                         const movedItem = filesList.splice(evt.oldIndex, 1)[0];
                         filesList.splice(evt.newIndex, 0, movedItem);
-                        updateUI(); // Rebuild everything so indexes stay perfectly in sync
+                        updateUI(); 
                     }
                 });
             }
@@ -657,8 +786,7 @@
                 }
             } catch (error) {
                 console.error(error);
-                errorToast.classList.remove('hidden');
-                errorToast.classList.add('flex');
+                showErrorToast();
             }
 
             loaderSvg.classList.add('hidden');
