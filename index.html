@@ -8,6 +8,11 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <!-- pdf-lib for merging PDFs locally -->
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <!-- pdf.js for rendering/compressing PDFs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
     <!-- SortableJS for smooth drag and drop reordering -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <style>
@@ -113,9 +118,8 @@
             </div>
         </div>
 
-        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 flex flex-col gap-6">
+        <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 flex flex-col gap-6" id="main-settings" style="opacity: 0.5; pointer-events: none;">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                
                 <div class="flex flex-col gap-2 sm:col-span-2">
                     <label class="text-xs font-bold text-zinc-500 uppercase tracking-widest">Output Mode</label>
                     <div class="flex bg-zinc-950 p-1 rounded-xl border border-zinc-800">
@@ -235,13 +239,22 @@
                 <div id="merge-list" class="flex flex-col gap-2">
                     <!-- PDF items injected here -->
                 </div>
+
+                <div class="flex flex-col gap-2 w-full mt-2 transition-all duration-200" id="merge-settings" style="opacity: 0.5; pointer-events: none;">
+                    <label class="text-xs font-bold text-zinc-500 uppercase tracking-widest">Thickometer (Merge Quality)</label>
+                    <div class="flex bg-zinc-950 p-1 rounded-xl border border-zinc-800">
+                        <button class="merge-setting-btn flex-1 py-2 text-sm font-bold rounded-lg text-zinc-400 hover:text-zinc-200 transition-all" data-val="0.3">Deep Fried</button>
+                        <button class="merge-setting-btn flex-1 py-2 text-sm font-bold rounded-lg text-zinc-400 hover:text-zinc-200 transition-all" data-val="0.7">Mid</button>
+                        <button class="merge-setting-btn flex-1 py-2 text-sm font-bold rounded-lg bg-zinc-800 text-white shadow transition-all" data-val="1.0">Crispy</button>
+                    </div>
+                </div>
             </div>
         </div>
         
         <div class="p-6 border-t border-zinc-800 bg-zinc-900/80 flex flex-col sm:flex-row justify-center items-center gap-4">
             <input type="text" id="merged-filename-input" class="w-full sm:w-64 bg-zinc-950 border border-zinc-800 text-zinc-200 text-sm font-medium rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500 transition-colors" placeholder="Merged file name (optional)">
             
-            <button id="do-merge-btn" disabled class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white text-base px-10 py-3 rounded-xl font-bold transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2">
+            <button id="do-merge-btn" disabled class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800 disabled:text-zinc-500 disabled:shadow-none disabled:active:scale-100 disabled:cursor-not-allowed text-white text-base px-10 py-3 rounded-xl font-bold transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2">
                 <span>Merge & Download</span>
                 <svg class="w-5 h-5 hidden merge-loader animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
             </button>
@@ -320,6 +333,7 @@
         const dynamicFooterQuote = document.getElementById('dynamic-footer-quote');
         const errorToast = document.getElementById('error-toast');
         const lineupCount = document.getElementById('lineup-count');
+        const mainSettings = document.getElementById('main-settings');
         
         // Organize Elements
         const organizeBtn = document.getElementById('organize-btn');
@@ -347,6 +361,7 @@
         // --- PDF Merge State & DOM ---
         let mergeFilesList = [];
         let sortableInstanceMerge = null;
+        let mergeQuality = 1.0;
         
         const openMergeModalBtn = document.getElementById('open-merge-modal-btn');
         const mergeModal = document.getElementById('merge-modal');
@@ -357,6 +372,20 @@
         const doMergeBtn = document.getElementById('do-merge-btn');
         const mergeLoader = document.querySelector('.merge-loader');
         const mergedFilenameInput = document.getElementById('merged-filename-input');
+        const mergeSettings = document.getElementById('merge-settings');
+        const mergeSettingBtns = document.querySelectorAll('.merge-setting-btn');
+
+        mergeSettingBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                mergeQuality = parseFloat(e.target.getAttribute('data-val'));
+                mergeSettingBtns.forEach(b => {
+                    b.classList.remove('bg-zinc-800', 'text-white', 'shadow');
+                    b.classList.add('text-zinc-400');
+                });
+                e.target.classList.add('bg-zinc-800', 'text-white', 'shadow');
+                e.target.classList.remove('text-zinc-400');
+            });
+        });
 
         openMergeModalBtn.addEventListener('click', () => {
             utilsDropdown.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
@@ -389,32 +418,43 @@
             updateMergeUI();
         }
 
+        function updateMergeNumbers() {
+            const rows = mergeList.querySelectorAll('.merge-row');
+            rows.forEach((row, idx) => {
+                row.querySelector('.row-num').innerText = idx + 1;
+                row.querySelector('.delete-btn').setAttribute('onclick', `deleteMergeFile(${idx})`);
+            });
+        }
+
         function updateMergeUI() {
             mergeList.innerHTML = '';
             
             if (mergeFilesList.length > 0) {
                 doMergeBtn.disabled = false;
                 doMergeBtn.querySelector('span').innerText = `Merge ${mergeFilesList.length} PDFs`;
+                mergeSettings.style.opacity = '1';
+                mergeSettings.style.pointerEvents = 'auto';
             } else {
                 doMergeBtn.disabled = true;
                 doMergeBtn.querySelector('span').innerText = 'Merge & Download';
+                mergeSettings.style.opacity = '0.5';
+                mergeSettings.style.pointerEvents = 'none';
             }
 
             mergeFilesList.forEach((file, index) => {
                 const row = document.createElement('div');
-                row.className = 'flex items-center gap-3 bg-zinc-900 border border-zinc-800 p-3 rounded-xl group cursor-grab active:cursor-grabbing';
+                row.className = 'merge-row flex items-center gap-3 bg-zinc-900 border border-zinc-800 p-3 rounded-xl group cursor-grab active:cursor-grabbing';
                 row.innerHTML = `
-                    <div class="text-zinc-500 font-bold w-6 text-center text-xs flex-shrink-0">${index + 1}</div>
+                    <div class="row-num text-zinc-500 font-bold w-6 text-center text-xs flex-shrink-0">${index + 1}</div>
                     <div class="flex-grow truncate text-zinc-300 text-sm font-medium">${file.name}</div>
-                    <button class="bg-zinc-800 hover:bg-red-500 text-zinc-400 hover:text-white rounded-lg w-8 h-8 flex items-center justify-center transition-colors shadow flex-shrink-0" onclick="deleteMergeFile(${index})">
+                    <button class="delete-btn bg-zinc-800 hover:bg-red-500 text-zinc-400 hover:text-white rounded-lg w-8 h-8 flex items-center justify-center transition-colors shadow flex-shrink-0" onclick="deleteMergeFile(${index})">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                     </button>
                 `;
                 mergeList.appendChild(row);
             });
 
-            if (sortableInstanceMerge) sortableInstanceMerge.destroy();
-            if (mergeFilesList.length > 0) {
+            if (!sortableInstanceMerge) {
                 sortableInstanceMerge = new Sortable(mergeList, {
                     animation: 250,
                     ghostClass: 'sortable-ghost',
@@ -423,7 +463,7 @@
                     onEnd: function (evt) {
                         const movedItem = mergeFilesList.splice(evt.oldIndex, 1)[0];
                         mergeFilesList.splice(evt.newIndex, 0, movedItem);
-                        updateMergeUI();
+                        updateMergeNumbers(); 
                     }
                 });
             }
@@ -433,7 +473,7 @@
             if (mergeFilesList.length < 1) return;
             doMergeBtn.disabled = true;
             mergeLoader.classList.remove('hidden');
-            doMergeBtn.querySelector('span').innerText = 'Merging...';
+            doMergeBtn.querySelector('span').innerText = mergeQuality < 1.0 ? 'Compressing...' : 'Merging...';
 
             try {
                 const { PDFDocument } = window.PDFLib;
@@ -446,7 +486,39 @@
                     copiedPages.forEach((page) => mergedPdf.addPage(page));
                 }
 
-                const pdfBytes = await mergedPdf.save();
+                let pdfBytes = await mergedPdf.save();
+                
+                if (mergeQuality < 1.0) {
+                    const loadingTask = pdfjsLib.getDocument({ data: pdfBytes });
+                    const pdfDoc = await loadingTask.promise;
+                    const { jsPDF } = window.jspdf;
+                    const compressedPdf = new jsPDF();
+                    compressedPdf.deletePage(1);
+
+                    for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
+                        const page = await pdfDoc.getPage(pageNum);
+                        const scale = mergeQuality === 0.3 ? 1.0 : 1.5;
+                        const viewport = page.getViewport({ scale: scale });
+                        
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        canvas.height = viewport.height;
+                        canvas.width = viewport.width;
+                        
+                        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+                        
+                        const imgData = canvas.toDataURL('image/jpeg', mergeQuality);
+                        
+                        const pxToMm = 0.264583;
+                        const imgW_mm = canvas.width * pxToMm;
+                        const imgH_mm = canvas.height * pxToMm;
+                        const orientation = imgW_mm > imgH_mm ? 'l' : 'p';
+                        
+                        compressedPdf.addPage([imgW_mm, imgH_mm], orientation);
+                        compressedPdf.addImage(imgData, 'JPEG', 0, 0, imgW_mm, imgH_mm, undefined, 'FAST');
+                    }
+                    pdfBytes = compressedPdf.output('arraybuffer');
+                }
                 
                 // Trigger Download
                 const blob = new Blob([pdfBytes], { type: "application/pdf" });
@@ -463,11 +535,11 @@
 
             } catch (error) {
                 console.error("Merge error:", error);
-                alert("Failed to merge PDFs. Make sure files aren't encrypted.");
+                alert("Failed to process PDFs. Make sure files aren't encrypted.");
             }
 
             mergeLoader.classList.add('hidden');
-            updateMergeUI(); // Re-evaluates disabled state
+            updateMergeUI();
         });
 
 
@@ -873,10 +945,14 @@
                 previewContainer.classList.remove('hidden');
                 cookBtn.disabled = false;
                 cookBtn.querySelector('span').innerText = `Cook PDF (${filesList.length} pics)`;
+                mainSettings.style.opacity = '1';
+                mainSettings.style.pointerEvents = 'auto';
             } else {
                 previewContainer.classList.add('hidden');
                 cookBtn.disabled = true;
                 cookBtn.querySelector('span').innerText = 'Cook the PDF';
+                mainSettings.style.opacity = '0.5';
+                mainSettings.style.pointerEvents = 'none';
             }
 
             renderRenameUI();
