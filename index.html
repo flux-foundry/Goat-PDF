@@ -6,6 +6,8 @@
     <title>GoatPDF | Fast. Local. Goated.</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- pdf-lib for merging PDFs locally -->
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
     <!-- SortableJS for smooth drag and drop reordering -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <style>
@@ -58,6 +60,23 @@
     </style>
 </head>
 <body class="min-h-screen flex flex-col items-center p-4 sm:p-8 relative">
+
+    <!-- Top Right Utilities Menu -->
+    <div class="fixed top-4 right-4 sm:top-8 sm:right-8 z-50">
+        <div class="relative">
+            <button id="utils-menu-btn" class="w-11 h-11 bg-zinc-900 border border-zinc-800 hover:border-zinc-600 rounded-xl flex items-center justify-center text-zinc-400 hover:text-white transition-all shadow-xl">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path></svg>
+            </button>
+            <div id="utils-dropdown" class="absolute right-0 mt-2 w-48 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden transform origin-top-right transition-all duration-200 opacity-0 scale-95 pointer-events-none">
+                <div class="py-1">
+                    <button id="open-merge-modal-btn" class="w-full px-4 py-3 text-sm font-bold text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors flex items-center gap-3">
+                        <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        Merge PDFs
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <main class="w-full max-w-2xl flex flex-col gap-6 mt-4 sm:mt-8 flex-grow">
         <header class="text-center space-y-1">
@@ -147,7 +166,7 @@
                     <!-- Rename inputs generated dynamically here -->
                 </div>
 
-                <!-- Custom Error Toast (Minimal & Clean) -->
+                <!-- Custom Error Toast -->
                 <div id="error-toast" class="hidden w-full bg-zinc-900 border border-red-500/30 p-4 rounded-2xl flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
                     <div class="flex items-center gap-3">
                         <span class="text-2xl">💀</span>
@@ -193,12 +212,48 @@
         </div>
     </div>
 
+    <!-- Merge PDFs Modal -->
+    <div id="merge-modal" class="hidden fixed inset-0 z-[70] bg-zinc-950 flex flex-col transition-opacity duration-200 opacity-0">
+        <div class="p-6 flex items-center justify-between border-b border-zinc-800 bg-zinc-900/50">
+            <div>
+                <h2 class="text-2xl sm:text-3xl font-black text-zinc-100 flex items-center gap-2">Merge PDFs</h2>
+                <p class="text-sm text-zinc-500 font-medium mt-1">Combine multiple PDFs entirely offline. Drag to reorder.</p>
+            </div>
+            <button id="close-merge" class="bg-zinc-800 text-white rounded-full w-12 h-12 flex items-center justify-center text-xl font-bold shadow-lg hover:bg-zinc-700 transition-colors">×</button>
+        </div>
+        
+        <div class="flex-grow p-4 sm:p-8 overflow-y-auto flex flex-col items-center">
+            <div class="w-full max-w-2xl flex flex-col gap-6">
+                <div id="merge-drop-zone" class="w-full border-2 border-dashed border-zinc-700 rounded-3xl p-8 flex flex-col items-center justify-center cursor-pointer transition-all hover:border-zinc-500 hover:bg-zinc-900/50 group">
+                    <input type="file" id="merge-file-input" multiple accept="application/pdf" class="hidden">
+                    <div class="w-12 h-12 bg-zinc-800 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-all">
+                        <svg class="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    </div>
+                    <p class="text-zinc-200 font-bold">Add PDFs to merge</p>
+                </div>
+                
+                <div id="merge-list" class="flex flex-col gap-2">
+                    <!-- PDF items injected here -->
+                </div>
+            </div>
+        </div>
+        
+        <div class="p-6 border-t border-zinc-800 bg-zinc-900/80 flex flex-col sm:flex-row justify-center items-center gap-4">
+            <input type="text" id="merged-filename-input" class="w-full sm:w-64 bg-zinc-950 border border-zinc-800 text-zinc-200 text-sm font-medium rounded-xl px-4 py-3 focus:outline-none focus:border-indigo-500 transition-colors" placeholder="Merged file name (optional)">
+            
+            <button id="do-merge-btn" disabled class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white text-base px-10 py-3 rounded-xl font-bold transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2">
+                <span>Merge & Download</span>
+                <svg class="w-5 h-5 hidden merge-loader animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            </button>
+        </div>
+    </div>
+
     <!-- Fullscreen Image Preview Modal -->
     <div id="image-modal" class="hidden fixed inset-0 z-[80] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 transition-opacity cursor-pointer">
         <div class="relative max-w-4xl w-full h-full flex flex-col items-center justify-center">
             <button id="close-modal" class="absolute top-4 right-4 bg-zinc-800 text-white rounded-full w-10 h-10 flex items-center justify-center text-xl font-bold shadow hover:bg-zinc-700 transition-colors z-[90]">×</button>
             <img id="modal-img" src="" class="max-w-full max-h-[85vh] rounded-lg shadow-2xl object-contain hidden" alt="Preview">
-            <!-- Native HTML fallback, fully respects the app's font -->
+            <!-- Native HTML fallback -->
             <div id="modal-fallback" class="hidden flex-col items-center justify-center p-8 bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl text-center max-w-xs w-full aspect-square">
                 <span class="text-zinc-500 font-bold text-xl leading-snug">Preview acting sus,<br>but the PDF will still cook</span>
             </div>
@@ -231,6 +286,25 @@
             targetSize: 0, 
             margin: 0
         };
+
+        // --- Menu Logic ---
+        const utilsMenuBtn = document.getElementById('utils-menu-btn');
+        const utilsDropdown = document.getElementById('utils-dropdown');
+        
+        utilsMenuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (utilsDropdown.classList.contains('opacity-0')) {
+                utilsDropdown.classList.remove('opacity-0', 'scale-95', 'pointer-events-none');
+            } else {
+                utilsDropdown.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!utilsDropdown.contains(e.target) && e.target !== utilsMenuBtn) {
+                utilsDropdown.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
+            }
+        });
 
         // --- DOM Elements ---
         const dropZone = document.getElementById('drop-zone');
@@ -269,6 +343,133 @@
         const confirmYes = document.getElementById('confirm-yes');
         const confirmCancel = document.getElementById('confirm-cancel');
         let confirmAction = null; 
+
+        // --- PDF Merge State & DOM ---
+        let mergeFilesList = [];
+        let sortableInstanceMerge = null;
+        
+        const openMergeModalBtn = document.getElementById('open-merge-modal-btn');
+        const mergeModal = document.getElementById('merge-modal');
+        const closeMergeBtn = document.getElementById('close-merge');
+        const mergeDropZone = document.getElementById('merge-drop-zone');
+        const mergeFileInput = document.getElementById('merge-file-input');
+        const mergeList = document.getElementById('merge-list');
+        const doMergeBtn = document.getElementById('do-merge-btn');
+        const mergeLoader = document.querySelector('.merge-loader');
+        const mergedFilenameInput = document.getElementById('merged-filename-input');
+
+        openMergeModalBtn.addEventListener('click', () => {
+            utilsDropdown.classList.add('opacity-0', 'scale-95', 'pointer-events-none');
+            mergeModal.classList.remove('hidden');
+            requestAnimationFrame(() => mergeModal.classList.remove('opacity-0'));
+            updateMergeUI();
+        });
+
+        closeMergeBtn.addEventListener('click', () => {
+            mergeModal.classList.add('opacity-0');
+            setTimeout(() => mergeModal.classList.add('hidden'), 200);
+        });
+
+        mergeFileInput.addEventListener('click', function() { this.value = null; });
+        mergeDropZone.addEventListener('click', () => mergeFileInput.click());
+        mergeDropZone.addEventListener('dragover', (e) => { e.preventDefault(); mergeDropZone.classList.add('drag-active'); });
+        mergeDropZone.addEventListener('dragleave', () => mergeDropZone.classList.remove('drag-active'));
+        mergeDropZone.addEventListener('drop', (e) => { e.preventDefault(); mergeDropZone.classList.remove('drag-active'); handleMergeFiles(e.dataTransfer.files); });
+        mergeFileInput.addEventListener('change', (e) => handleMergeFiles(e.target.files));
+
+        function handleMergeFiles(files) {
+            const validPdfs = Array.from(files).filter(file => file.type === 'application/pdf');
+            if (validPdfs.length === 0) return;
+            mergeFilesList = [...mergeFilesList, ...validPdfs];
+            updateMergeUI();
+        }
+
+        window.deleteMergeFile = function(index) {
+            mergeFilesList.splice(index, 1);
+            updateMergeUI();
+        }
+
+        function updateMergeUI() {
+            mergeList.innerHTML = '';
+            
+            if (mergeFilesList.length > 0) {
+                doMergeBtn.disabled = false;
+                doMergeBtn.querySelector('span').innerText = `Merge ${mergeFilesList.length} PDFs`;
+            } else {
+                doMergeBtn.disabled = true;
+                doMergeBtn.querySelector('span').innerText = 'Merge & Download';
+            }
+
+            mergeFilesList.forEach((file, index) => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center gap-3 bg-zinc-900 border border-zinc-800 p-3 rounded-xl group cursor-grab active:cursor-grabbing';
+                row.innerHTML = `
+                    <div class="text-zinc-500 font-bold w-6 text-center text-xs flex-shrink-0">${index + 1}</div>
+                    <div class="flex-grow truncate text-zinc-300 text-sm font-medium">${file.name}</div>
+                    <button class="bg-zinc-800 hover:bg-red-500 text-zinc-400 hover:text-white rounded-lg w-8 h-8 flex items-center justify-center transition-colors shadow flex-shrink-0" onclick="deleteMergeFile(${index})">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    </button>
+                `;
+                mergeList.appendChild(row);
+            });
+
+            if (sortableInstanceMerge) sortableInstanceMerge.destroy();
+            if (mergeFilesList.length > 0) {
+                sortableInstanceMerge = new Sortable(mergeList, {
+                    animation: 250,
+                    ghostClass: 'sortable-ghost',
+                    dragClass: 'sortable-drag',
+                    easing: "cubic-bezier(0.25, 1, 0.5, 1)",
+                    onEnd: function (evt) {
+                        const movedItem = mergeFilesList.splice(evt.oldIndex, 1)[0];
+                        mergeFilesList.splice(evt.newIndex, 0, movedItem);
+                        updateMergeUI();
+                    }
+                });
+            }
+        }
+
+        doMergeBtn.addEventListener('click', async () => {
+            if (mergeFilesList.length < 1) return;
+            doMergeBtn.disabled = true;
+            mergeLoader.classList.remove('hidden');
+            doMergeBtn.querySelector('span').innerText = 'Merging...';
+
+            try {
+                const { PDFDocument } = window.PDFLib;
+                const mergedPdf = await PDFDocument.create();
+                
+                for (let file of mergeFilesList) {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await PDFDocument.load(arrayBuffer);
+                    const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+                    copiedPages.forEach((page) => mergedPdf.addPage(page));
+                }
+
+                const pdfBytes = await mergedPdf.save();
+                
+                // Trigger Download
+                const blob = new Blob([pdfBytes], { type: "application/pdf" });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                
+                let outName = mergedFilenameInput.value.trim() || "Merged_Lore";
+                if (!outName.toLowerCase().endsWith('.pdf')) outName += '.pdf';
+                
+                link.download = outName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+            } catch (error) {
+                console.error("Merge error:", error);
+                alert("Failed to merge PDFs. Make sure files aren't encrypted.");
+            }
+
+            mergeLoader.classList.add('hidden');
+            updateMergeUI(); // Re-evaluates disabled state
+        });
+
 
         // --- Memory Jokes (Non-Repeating) ---
         const memoryJokes = [
